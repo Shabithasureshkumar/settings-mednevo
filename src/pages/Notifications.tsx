@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { BellRing, CalendarDays, ChevronRight, FlaskConical, Info, Lock, Mail, MessageSquareMore, Moon, Pill as PillIcon, TriangleAlert } from 'lucide-react'
 import { Toggle } from '../components/ui'
+import { useApp, useToast } from '../components/feedback'
 
 type Channel = 'push' | 'email' | 'sms'
 
@@ -12,7 +13,10 @@ const categories = [
 ]
 
 export default function Notifications() {
+  const toast = useToast()
+  const { go } = useApp()
   const [prefs, setPrefs] = useState(categories.map((c) => c.on))
+  const [quiet, setQuiet] = useState({ start: '22:00', end: '07:00' })
 
   const setPref = (i: number, ch: Channel, v: boolean) =>
     setPrefs((p) => p.map((row, idx) => (idx === i ? { ...row, [ch]: v } : row)))
@@ -63,7 +67,10 @@ export default function Notifications() {
       <section className="pt-8">
         <h2 className="mb-5 text-2xl font-semibold">Delivery Status</h2>
         <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-gradient-to-r from-brand-50 to-white p-4">
+          <button
+            onClick={() => toast('Push notifications are delivered to iPhone 15.', 'info')}
+            className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-gradient-to-r from-brand-50 to-white p-4 text-left"
+          >
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-gradient text-white">
               <BellRing className="h-5 w-5" fill="currentColor" />
             </div>
@@ -72,8 +79,11 @@ export default function Notifications() {
               <p className="text-xs text-gray-400">Connected to iPhone 15</p>
             </div>
             <ChevronRight className="h-4 w-4 text-gray-400" />
-          </div>
-          <div className="flex items-center gap-4 rounded-2xl border border-brand-200 bg-gradient-to-r from-brand-50 to-white p-4">
+          </button>
+          <button
+            onClick={() => toast('Email alerts are sent to alex.r@healthcore.com.', 'info')}
+            className="flex items-center gap-4 rounded-2xl border border-brand-200 bg-gradient-to-r from-brand-50 to-white p-4 text-left"
+          >
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-500 text-white">
               <Mail className="h-5 w-5" fill="currentColor" stroke="#5C24FF" />
             </div>
@@ -82,8 +92,14 @@ export default function Notifications() {
               <p className="text-xs text-gray-400">alex.r@healthcore.com</p>
             </div>
             <ChevronRight className="h-4 w-4 text-gray-400" />
-          </div>
-          <div className="flex items-center gap-4 rounded-2xl bg-gray-100 p-4 opacity-70">
+          </button>
+          <button
+            onClick={() => {
+              toast('Add and verify a phone number to enable SMS.', 'info')
+              go('account')
+            }}
+            className="flex items-center gap-4 rounded-2xl bg-gray-100 p-4 text-left opacity-70"
+          >
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-400 text-white">
               <MessageSquareMore className="h-5 w-5" />
             </div>
@@ -92,8 +108,11 @@ export default function Notifications() {
               <p className="text-xs text-gray-400">No phone verified</p>
             </div>
             <Lock className="h-4 w-4 text-gray-300" />
-          </div>
-          <button className="mt-4 rounded-2xl bg-brand-gradient py-3.5 text-sm font-semibold text-white shadow-brand">
+          </button>
+          <button
+            onClick={() => toast('Notification settings updated.')}
+            className="mt-4 rounded-2xl bg-brand-gradient py-3.5 text-sm font-semibold text-white shadow-brand"
+          >
             Update Global Settings
           </button>
         </div>
@@ -113,11 +132,23 @@ export default function Notifications() {
         <div className="mt-8 grid max-w-md grid-cols-2 gap-6">
           <div>
             <p className="text-sm text-gray-500">Starts At</p>
-            <p className="mt-6 px-5 font-mono text-[15px] text-gray-700">10:00 PM</p>
+            <input
+              type="time"
+              aria-label="Quiet hours start"
+              value={quiet.start}
+              onChange={(e) => setQuiet({ ...quiet, start: e.target.value })}
+              className="mt-4 h-12 w-full rounded-xl border border-gray-200 bg-white px-5 font-mono text-[15px] text-gray-700 outline-none focus:ring-2 focus:ring-brand-200"
+            />
           </div>
           <div>
             <p className="text-sm text-gray-500">Ends At</p>
-            <p className="mt-6 px-5 font-mono text-[15px] text-gray-700">07:00 AM</p>
+            <input
+              type="time"
+              aria-label="Quiet hours end"
+              value={quiet.end}
+              onChange={(e) => setQuiet({ ...quiet, end: e.target.value })}
+              className="mt-4 h-12 w-full rounded-xl border border-gray-200 bg-white px-5 font-mono text-[15px] text-gray-700 outline-none focus:ring-2 focus:ring-brand-200"
+            />
           </div>
         </div>
         <div className="mt-10 flex items-center gap-4 rounded-2xl border border-gray-100 bg-gray-50 px-6 py-5">

@@ -1,22 +1,88 @@
+import { useState } from 'react'
 import { AlarmClock, Check, BarChart3, ShieldCheck, Sprout } from 'lucide-react'
 import { Toggle } from '../components/ui'
+import { Modal, btnGhost, useToast } from '../components/feedback'
 import analyticsImg from '../assets/analytics-cells.png'
 
-function Row({ t, d }: { t: string; d: string }) {
+function Row({ t, d, on, onChange }: { t: string; d: string; on: boolean; onChange: (v: boolean) => void }) {
   return (
     <div className="flex items-center justify-between px-5 py-5">
       <div>
         <p className="text-sm font-semibold text-gray-800">{t}</p>
         <p className="text-xs text-gray-500">{d}</p>
       </div>
-      <Toggle />
+      <Toggle checked={on} onChange={onChange} />
     </div>
   )
 }
 
 const inputCls = 'h-14 rounded-2xl border border-teal-100 bg-white px-5 text-[15px] text-gray-800 outline-none focus:ring-2 focus:ring-brand-200'
 
+const defaults = {
+  cycle: '28',
+  period: '5',
+  luteal: '14',
+  alerts: { period: false, ovulation: false, fertile: false, symptoms: false, sharing: false },
+}
+
+const ranges = {
+  cycle: { min: 21, max: 45, label: 'Cycle length' },
+  period: { min: 1, max: 10, label: 'Period duration' },
+  luteal: { min: 8, max: 18, label: 'Luteal phase length' },
+} as const
+
+type RangeKey = keyof typeof ranges
+
+// Accepts "5", "5 Days" etc. and returns the number part
+const num = (v: string) => Number(v.replace(/\D/g, ''))
+
 export default function PeriodTracker() {
+  const toast = useToast()
+  const [saved, setSaved] = useState(defaults)
+  const [vals, setVals] = useState({ cycle: defaults.cycle, period: defaults.period, luteal: defaults.luteal })
+  const [alerts, setAlerts] = useState(defaults.alerts)
+  const [errors, setErrors] = useState<Partial<Record<RangeKey, string>>>({})
+  const [insights, setInsights] = useState(false)
+
+  const setAlert = (k: keyof typeof alerts) => (v: boolean) => setAlerts((a) => ({ ...a, [k]: v }))
+
+  const save = () => {
+    const e: Partial<Record<RangeKey, string>> = {}
+    ;(Object.keys(ranges) as RangeKey[]).forEach((k) => {
+      const n = num(vals[k])
+      const r = ranges[k]
+      if (!vals[k].trim() || Number.isNaN(n) || n < r.min || n > r.max) e[k] = `${r.label} must be ${r.min}-${r.max} days.`
+    })
+    setErrors(e)
+    if (Object.keys(e).length) return toast('Please fix the highlighted values.', 'error')
+    const clean = { cycle: String(num(vals.cycle)), period: String(num(vals.period)), luteal: String(num(vals.luteal)) }
+    setVals(clean)
+    setSaved({ ...clean, alerts })
+    toast('Cycle configuration saved.')
+  }
+
+  const discard = () => {
+    setVals({ cycle: saved.cycle, period: saved.period, luteal: saved.luteal })
+    setAlerts(saved.alerts)
+    setErrors({})
+    toast('Changes discarded.', 'info')
+  }
+
+  const field = (k: RangeKey, width: string, center = false) => (
+    <div>
+      <div className="flex items-center gap-5">
+        <input
+          value={vals[k]}
+          inputMode="numeric"
+          onChange={(e) => setVals({ ...vals, [k]: e.target.value })}
+          className={`${inputCls} ${width} ${center ? 'text-center' : ''} ${errors[k] ? 'border-red-300' : ''}`}
+        />
+        <span className="text-[15px] text-gray-700">days</span>
+      </div>
+      {errors[k] && <p className="mt-1 max-w-[220px] text-xs text-red-600">{errors[k]}</p>}
+    </div>
+  )
+
   return (
     <div className="grid grid-cols-[1fr_340px] gap-8">
       {/* Settings card */}
@@ -34,37 +100,34 @@ export default function PeriodTracker() {
         <div className="mt-6 flex items-end gap-6 border-b border-gray-100 pb-7">
           <label className="block">
             <span className="mb-2 block text-xs text-gray-800">Cycle Length</span>
-            <div className="flex items-center gap-5">
-              <input defaultValue="28" className={`${inputCls} w-[120px] text-center`} />
-              <span className="text-[15px] text-gray-700">days</span>
-            </div>
+            {field('cycle', 'w-[120px]', true)}
           </label>
           <label className="block">
             <span className="mb-2 block text-xs text-gray-800">Period Duration</span>
-            <input defaultValue="5 Days" className={`${inputCls} w-[200px]`} />
+            {field('period', 'w-[120px]', true)}
           </label>
           <label className="block">
             <span className="mb-2 block text-xs text-gray-800">Luteal Phase Length</span>
-            <input defaultValue="14 Days" className={`${inputCls} w-[200px]`} />
+            {field('luteal', 'w-[120px]', true)}
           </label>
         </div>
 
         <h3 className="mt-7 flex items-center gap-2 text-lg font-semibold">
           <AlarmClock className="h-5 w-5 text-brand-ink" /> Smart Alerts
         </h3>
-        <Row t="Period Reminder" d="Notify me 2 days before predicted start." />
-        <Row t="Ovulation Reminder" d="High-precision peak notification." />
-        <Row t="Fertile Window Visibility" d="Show 6-day prediction window on dashboard." />
+        <Row t="Period Reminder" d="Notify me 2 days before predicted start." on={alerts.period} onChange={setAlert('period')} />
+        <Row t="Ovulation Reminder" d="High-precision peak notification." on={alerts.ovulation} onChange={setAlert('ovulation')} />
+        <Row t="Fertile Window Visibility" d="Show 6-day prediction window on dashboard." on={alerts.fertile} onChange={setAlert('fertile')} />
 
         <h3 className="mt-3 flex items-center gap-2 text-lg font-semibold">
           <ShieldCheck className="h-5 w-5 text-brand-ink" fill="currentColor" stroke="white" /> Privacy &amp; Logging
         </h3>
-        <Row t="Daily Symptoms Prompt" d="Log mood, energy, and physical markers." />
-        <Row t="Cycle Data Sharing" d="Allow HealthCore AI to analyze trends for better accuracy." />
+        <Row t="Daily Symptoms Prompt" d="Log mood, energy, and physical markers." on={alerts.symptoms} onChange={setAlert('symptoms')} />
+        <Row t="Cycle Data Sharing" d="Allow HealthCore AI to analyze trends for better accuracy." on={alerts.sharing} onChange={setAlert('sharing')} />
 
         <div className="mt-8 flex items-center justify-end gap-10">
-          <button className="text-[15px] text-brand-ink">Discard Changes</button>
-          <button className="rounded-2xl bg-brand-gradient px-8 py-3.5 text-[15px] text-white shadow-brand">
+          <button onClick={discard} className="text-[15px] text-brand-ink">Discard Changes</button>
+          <button onClick={save} className="rounded-2xl bg-brand-gradient px-8 py-3.5 text-[15px] text-white shadow-brand">
             Save Configuration
           </button>
         </div>
@@ -112,7 +175,10 @@ export default function PeriodTracker() {
               <span className="h-5 w-5 rounded-full border border-gray-300" /> Basal temp missing (3 days)
             </li>
           </ul>
-          <button className="mt-7 w-full rounded-2xl border border-brand-ink py-3 text-[17px] text-brand-ink">
+          <button
+            onClick={() => setInsights(true)}
+            className="mt-7 w-full rounded-2xl border border-brand-ink py-3 text-[17px] text-brand-ink"
+          >
             View Insights Report
           </button>
         </div>
@@ -126,6 +192,17 @@ export default function PeriodTracker() {
           </div>
         </div>
       </div>
+
+      {insights && (
+        <Modal title="Insights report" onClose={() => setInsights(false)} footer={<button className={btnGhost} onClick={() => setInsights(false)}>Close</button>}>
+          <dl className="space-y-3 text-sm">
+            <div className="flex justify-between"><dt className="text-gray-500">Average cycle length</dt><dd className="font-semibold">{saved.cycle} days</dd></div>
+            <div className="flex justify-between"><dt className="text-gray-500">Average period duration</dt><dd className="font-semibold">{saved.period} days</dd></div>
+            <div className="flex justify-between"><dt className="text-gray-500">Luteal phase</dt><dd className="font-semibold">{saved.luteal} days</dd></div>
+            <div className="flex justify-between"><dt className="text-gray-500">Logging consistency</dt><dd className="font-semibold">88%</dd></div>
+          </dl>
+        </Modal>
+      )}
     </div>
   )
 }

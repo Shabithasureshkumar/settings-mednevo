@@ -1,7 +1,43 @@
 import { ArrowRight, Download, Heart, PaintbrushVertical, SquareX, TriangleAlert, Activity } from 'lucide-react'
+import { useState } from 'react'
 import { PageHeader, Toggle } from '../components/ui'
+import { ConfirmModal, useApp, useToast } from '../components/feedback'
 
 export default function DataManagement() {
+  const toast = useToast()
+  const { signOut } = useApp()
+  const [requesting, setRequesting] = useState(false)
+  const [requested, setRequested] = useState(false)
+  const [cacheMb, setCacheMb] = useState(24)
+  const [clearing, setClearing] = useState(false)
+  const [apps, setApps] = useState({ 'Apple Health': true, 'Google Fit': true })
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const activeCount = Object.values(apps).filter(Boolean).length
+
+  const requestExport = () => {
+    setRequesting(true)
+    window.setTimeout(() => {
+      setRequesting(false)
+      setRequested(true)
+      toast('Export requested. We will email you a download link within 24 hours.')
+    }, 900)
+  }
+
+  const clearCache = async () => {
+    setClearing(true)
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys()
+        await Promise.all(keys.map((k) => caches.delete(k)))
+      }
+    } catch {
+      // Cache Storage can be unavailable (private mode); the displayed size still resets
+    }
+    setCacheMb(0)
+    setClearing(false)
+    toast('Cache cleared.')
+  }
+
   return (
     <div>
       <PageHeader
@@ -18,8 +54,13 @@ export default function DataManagement() {
           <p className="mt-2 text-sm leading-6 text-gray-600">
             Receive a secure ZIP archive of your medical history, vitals, and reports.
           </p>
-          <button className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-gradient py-3 text-sm font-semibold text-white">
-            Request data export <ArrowRight className="h-4 w-4" />
+          <button
+            onClick={requestExport}
+            disabled={requesting || requested}
+            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-gradient py-3 text-sm font-semibold text-white disabled:opacity-70"
+          >
+            {requesting ? 'Requesting…' : requested ? 'Export requested' : 'Request data export'}
+            {!requested && <ArrowRight className="h-4 w-4" />}
           </button>
           <p className="mx-auto mt-3 max-w-[220px] text-center text-[10px] leading-4 text-gray-500">
             A link will be sent to your registered email address within 24 hours.
@@ -36,10 +77,14 @@ export default function DataManagement() {
           </p>
           <div className="mt-6 flex items-center justify-between px-1">
             <span className="text-xs font-semibold text-gray-800">Current Cache Size</span>
-            <span className="font-mono text-sm text-brand-500">24 MB</span>
+            <span className="font-mono text-sm text-brand-500">{cacheMb} MB</span>
           </div>
-          <button className="mt-3 w-full rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-800">
-            Clear cache
+          <button
+            onClick={clearCache}
+            disabled={clearing || cacheMb === 0}
+            className="mt-3 w-full rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-800 disabled:opacity-60"
+          >
+            {clearing ? 'Clearing…' : 'Clear cache'}
           </button>
         </div>
       </div>
@@ -48,7 +93,7 @@ export default function DataManagement() {
       <div className="mt-6 overflow-hidden rounded-2xl">
         <div className="flex items-center justify-between bg-brand-50/50 px-7 py-6">
           <h3 className="text-xl font-semibold">Connected Third-party Apps</h3>
-          <span className="rounded-full bg-brand-100 px-4 py-1.5 text-sm font-semibold text-brand-ink">2 Active Connections</span>
+          <span className="rounded-full bg-brand-100 px-4 py-1.5 text-sm font-semibold text-brand-ink">{activeCount} Active {activeCount === 1 ? 'Connection' : 'Connections'}</span>
         </div>
         {[
           { t: 'Apple Health', d: 'Synchronizing heart rate, steps, and sleep cycles.', icon: Heart, cls: 'bg-[#E8523F] text-white' },
@@ -64,7 +109,13 @@ export default function DataManagement() {
                 <p className="text-xs text-gray-500">{a.d}</p>
               </div>
             </div>
-            <Toggle defaultChecked />
+            <Toggle
+              checked={apps[a.t as keyof typeof apps]}
+              onChange={(v) => {
+                setApps((p) => ({ ...p, [a.t]: v }))
+                toast(v ? `${a.t} connected.` : `${a.t} disconnected.`, v ? 'success' : 'info')
+              }}
+            />
           </div>
         ))}
       </div>
@@ -84,11 +135,29 @@ export default function DataManagement() {
           </div>
         </div>
         <div className="mt-4 flex justify-end">
-          <button className="flex items-center gap-2 rounded-xl bg-danger px-6 py-3.5 text-[15px] font-semibold text-white">
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="flex items-center gap-2 rounded-xl bg-danger px-6 py-3.5 text-[15px] font-semibold text-white"
+          >
             <SquareX className="h-4 w-4" /> Delete account
           </button>
         </div>
       </div>
+
+      {confirmDelete && (
+        <ConfirmModal
+          title="Delete account permanently?"
+          message="This erases your patient record and all associated diagnostic data. It cannot be undone."
+          confirmLabel="Delete account"
+          requireText="DELETE"
+          danger
+          onConfirm={() => {
+            toast('Account deleted.', 'info')
+            signOut()
+          }}
+          onClose={() => setConfirmDelete(false)}
+        />
+      )}
     </div>
   )
 }

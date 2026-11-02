@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { AtSign, History, ShieldCheck } from 'lucide-react'
 import { Card, Toggle } from '../components/ui'
+import { Modal, btnGhost, useApp, useToast } from '../components/feedback'
 
 const items = [
   { t: 'AI Data Processing', d: 'Allow our AI to analyze trends in your health data for better insights and personalized recommendations.', on: true },
@@ -10,6 +12,10 @@ const items = [
 ]
 
 export default function Privacy() {
+  const toast = useToast()
+  const { go } = useApp()
+  const [policy, setPolicy] = useState(false)
+
   return (
     <Card className="mt-2 p-8">
       <div className="mb-8 flex items-center gap-3">
@@ -24,22 +30,35 @@ export default function Privacy() {
               <p className="text-[16px] font-semibold tracking-wide text-gray-800">{i.t}</p>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-400">{i.d}</p>
             </div>
-            <Toggle defaultChecked={i.on} />
+            <Toggle
+              defaultChecked={i.on}
+              onChange={(v) => toast(`${i.t} ${v ? 'enabled' : 'disabled'}.`, v ? 'success' : 'info')}
+            />
           </div>
         ))}
       </div>
 
       <div className="mt-6 flex items-center justify-between border-t border-gray-200 pt-6">
         <div className="flex items-center gap-8 text-sm font-semibold text-brand-ink">
-          <a href="#" className="flex items-center gap-1.5">
+          <button onClick={() => setPolicy(true)} className="flex items-center gap-1.5">
             <AtSign className="h-3.5 w-3.5" /> View Full Privacy Policy
-          </a>
-          <a href="#" className="flex items-center gap-1.5">
+          </button>
+          <button onClick={() => go('audit')} className="flex items-center gap-1.5">
             <History className="h-3.5 w-3.5" /> View Audit Log
-          </a>
+          </button>
         </div>
         <p className="text-xs text-gray-400">See who has accessed your records</p>
       </div>
+
+      {policy && (
+        <Modal title="Privacy Policy" onClose={() => setPolicy(false)} footer={<button className={btnGhost} onClick={() => setPolicy(false)}>Close</button>}>
+          <div className="space-y-3 text-sm leading-6 text-gray-600">
+            <p>We collect only the health and account data needed to provide your care services.</p>
+            <p>Your data is encrypted in transit and at rest, and is shared with your care team only with your consent.</p>
+            <p>You can export or delete your data at any time from the Data section of Settings.</p>
+          </div>
+        </Modal>
+      )}
     </Card>
   )
 }

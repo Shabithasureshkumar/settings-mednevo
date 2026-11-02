@@ -1,15 +1,17 @@
+import { useState } from 'react'
 import { BatteryLow, CircleAlert, CircleCheck, CirclePause, HeartPulse, MonitorSmartphone, Plus, Radio, RefreshCw, TrendingUp } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import appleWatch from '../assets/apple-watch.png'
 import bpMonitor from '../assets/bp-monitor.png'
 import weightScale from '../assets/weight-scale.png'
 import pulseOximeter from '../assets/pulse-oximeter.png'
+import { Field, Modal, btnGhost, btnPrimary, inputCls, useToast } from '../components/feedback'
 
-const stats: { label: string; value: string; icon: LucideIcon; badge: string; tag?: { text: string; cls: string }; blob: string }[] = [
-  { label: 'Total Devices', value: '04', icon: MonitorSmartphone, badge: 'bg-brand-50 text-brand-500', blob: 'bg-brand-50' },
-  { label: 'Active Devices', value: '03', icon: CircleCheck, badge: 'bg-green-50 text-green-600', tag: { text: 'Active', cls: 'bg-green-50 text-green-600' }, blob: 'bg-green-50' },
-  { label: 'Standby Devices', value: '01', icon: CirclePause, badge: 'bg-orange-50 text-orange-500', tag: { text: 'Standby', cls: 'bg-orange-50 text-orange-500' }, blob: 'bg-orange-50' },
-  { label: 'Disconnected', value: '00', icon: CircleAlert, badge: 'bg-red-50 text-red-600', tag: { text: 'Disconnected', cls: 'bg-red-50 text-red-600' }, blob: 'bg-red-50' },
+const statMeta: { label: string; icon: LucideIcon; badge: string; tag?: { text: string; cls: string }; blob: string; count: (d: Device[]) => number }[] = [
+  { label: 'Total Devices', icon: MonitorSmartphone, badge: 'bg-brand-50 text-brand-500', blob: 'bg-brand-50', count: (d) => d.length },
+  { label: 'Active Devices', icon: CircleCheck, badge: 'bg-green-50 text-green-600', tag: { text: 'Active', cls: 'bg-green-50 text-green-600' }, blob: 'bg-green-50', count: (d) => d.filter((x) => x.status === 'connected').length },
+  { label: 'Standby Devices', icon: CirclePause, badge: 'bg-orange-50 text-orange-500', tag: { text: 'Standby', cls: 'bg-orange-50 text-orange-500' }, blob: 'bg-orange-50', count: (d) => d.filter((x) => x.status === 'standby').length },
+  { label: 'Disconnected', icon: CircleAlert, badge: 'bg-red-50 text-red-600', tag: { text: 'Disconnected', cls: 'bg-red-50 text-red-600' }, blob: 'bg-red-50', count: (d) => d.filter((x) => x.status === 'disconnected').length },
 ]
 
 type Status = 'connected' | 'standby' | 'disconnected'
@@ -19,7 +21,15 @@ const statusStyle: Record<Status, { label: string; cls: string; dot: string }> =
   disconnected: { label: 'Disconnected', cls: 'bg-red-50 text-red-600', dot: 'bg-red-500' },
 }
 
-const devices: { name: string; sync: string; img: string; tags: string[]; status: Status }[] = [
+interface Device {
+  name: string
+  sync: string
+  img: string
+  tags: string[]
+  status: Status
+}
+
+const initialDevices: Device[] = [
   { name: 'Apple Watch Ultra 2', sync: '2 mins ago', img: appleWatch, tags: ['Heart Rate', 'Sleep', 'Activity'], status: 'connected' },
   { name: 'Withings BP Monitor', sync: '1 hour ago', img: bpMonitor, tags: ['Blood Pressure'], status: 'connected' },
   { name: 'Smart Weight Scale', sync: '6 hours ago', img: weightScale, tags: ['Weight', 'BMI', 'Body Fat'], status: 'standby' },
@@ -38,7 +48,61 @@ const bars = [
   { d: 'F', v: 100 }, { d: 'S', v: 40 }, { d: 'S', v: 65 },
 ]
 
+const deviceTypes: { name: string; img: string; tags: string[] }[] = [
+  { name: 'Smartwatch', img: appleWatch, tags: ['Heart Rate', 'Sleep', 'Activity'] },
+  { name: 'Blood Pressure Monitor', img: bpMonitor, tags: ['Blood Pressure'] },
+  { name: 'Weight Scale', img: weightScale, tags: ['Weight', 'BMI'] },
+  { name: 'Pulse Oximeter', img: pulseOximeter, tags: ['SpO2', 'Pulse Rate'] },
+]
+
 export default function Devices() {
+  const toast = useToast()
+  const [devices, setDevices] = useState(initialDevices)
+  const [syncing, setSyncing] = useState<string | null>(null)
+  const [reconnecting, setReconnecting] = useState<string | null>(null)
+  const [detail, setDetail] = useState<Device | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [history, setHistory] = useState(false)
+  const [type, setType] = useState(0)
+  const [label, setLabel] = useState('')
+  const [addError, setAddError] = useState('')
+
+  const patch = (name: string, change: Partial<Device>) =>
+    setDevices((d) => d.map((x) => (x.name === name ? { ...x, ...change } : x)))
+
+  const syncNow = (name: string) => {
+    setSyncing(name)
+    window.setTimeout(() => {
+      patch(name, { sync: 'Just now', status: 'connected' })
+      setSyncing(null)
+      toast(`${name} synced.`)
+    }, 1200)
+  }
+
+  const reconnect = (name: string) => {
+    setReconnecting(name)
+    window.setTimeout(() => {
+      patch(name, { status: 'connected', sync: 'Just now' })
+      setReconnecting(null)
+      toast(`${name} reconnected.`)
+    }, 1400)
+  }
+
+  const openAdd = () => {
+    setType(0)
+    setLabel('')
+    setAddError('')
+    setAdding(true)
+  }
+
+  const addDevice = () => {
+    const name = label.trim() || deviceTypes[type].name
+    if (devices.some((d) => d.name.toLowerCase() === name.toLowerCase())) return setAddError('A device with this name already exists.')
+    setDevices((d) => [...d, { name, sync: 'Just now', img: deviceTypes[type].img, tags: deviceTypes[type].tags, status: 'connected' }])
+    setAdding(false)
+    toast(`${name} added.`)
+  }
+
   return (
     <div className="pt-2">
       {/* Header */}
@@ -51,14 +115,14 @@ export default function Devices() {
             Manage and monitor your synchronized medical devices for comprehensive real-time health data tracking.
           </p>
         </div>
-        <button className="flex items-center gap-2 rounded-full bg-brand-gradient px-7 py-3.5 text-[15px] font-medium text-white shadow-btn">
+        <button onClick={openAdd} className="flex items-center gap-2 rounded-full bg-brand-gradient px-7 py-3.5 text-[15px] font-medium text-white shadow-btn">
           <Plus className="h-5 w-5" /> Add New Device
         </button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-6">
-        {stats.map((s) => (
+        {statMeta.map((s) => (
           <div key={s.label} className="relative overflow-hidden rounded-3xl border border-gray-100 bg-white p-6 shadow-card">
             <span className={`absolute -right-6 -top-6 h-20 w-20 rounded-full opacity-70 ${s.blob}`} />
             <div className="relative flex items-start justify-between">
@@ -68,7 +132,7 @@ export default function Devices() {
               {s.tag && <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${s.tag.cls}`}>{s.tag.text}</span>}
             </div>
             <p className="relative mt-5 text-[15px] font-semibold text-gray-700">{s.label}</p>
-            <p className="relative mt-1 text-[15px] text-gray-700">{s.value}</p>
+            <p className="relative mt-1 text-[15px] text-gray-700">{String(s.count(devices)).padStart(2, '0')}</p>
           </div>
         ))}
       </div>
@@ -97,14 +161,22 @@ export default function Devices() {
               </div>
               <div className="mt-6 grid grid-cols-2 gap-3">
                 {offline ? (
-                  <button className="rounded-xl bg-gray-200 py-3 text-sm text-gray-500">Offline</button>
+                  <button disabled className="cursor-not-allowed rounded-xl bg-gray-200 py-3 text-sm text-gray-500">Offline</button>
                 ) : (
-                  <button className="rounded-xl bg-brand-gradient py-3 text-sm text-white shadow-brand">
-                    Sync Now
+                  <button
+                    onClick={() => syncNow(dev.name)}
+                    disabled={syncing === dev.name}
+                    className="rounded-xl bg-brand-gradient py-3 text-sm text-white shadow-brand disabled:opacity-70"
+                  >
+                    {syncing === dev.name ? 'Syncing...' : 'Sync Now'}
                   </button>
                 )}
-                <button className="rounded-xl border border-gray-200 py-3 text-sm text-gray-600">
-                  {offline ? 'Reconnect' : 'Details'}
+                <button
+                  onClick={() => (offline ? reconnect(dev.name) : setDetail(dev))}
+                  disabled={reconnecting === dev.name}
+                  className="rounded-xl border border-gray-200 py-3 text-sm text-gray-600 disabled:opacity-70"
+                >
+                  {reconnecting === dev.name ? 'Connecting...' : offline ? 'Reconnect' : 'Details'}
                 </button>
               </div>
             </div>
@@ -117,7 +189,7 @@ export default function Devices() {
         <div className="col-span-3 rounded-3xl border border-gray-100 bg-white p-8 shadow-card">
           <div className="mb-8 flex items-center justify-between">
             <h3 className="text-[15px] text-gray-800">Recent Device Activity</h3>
-            <a href="#" className="text-[15px] text-brand-500">View History</a>
+            <button onClick={() => setHistory(true)} className="text-[15px] text-brand-500">View History</button>
           </div>
           <div className="relative">
             <span className="absolute bottom-10 left-4 top-4 w-px bg-gray-100" />
@@ -175,6 +247,58 @@ export default function Devices() {
           </div>
         </div>
       </div>
+
+      {detail && (
+        <Modal title={detail.name} onClose={() => setDetail(null)} footer={<button className={btnGhost} onClick={() => setDetail(null)}>Close</button>}>
+          <dl className="space-y-3 text-sm">
+            <div className="flex justify-between"><dt className="text-gray-500">Status</dt><dd className="font-semibold">{statusStyle[detail.status].label}</dd></div>
+            <div className="flex justify-between"><dt className="text-gray-500">Last sync</dt><dd className="font-semibold">{detail.sync}</dd></div>
+            <div className="flex justify-between gap-6"><dt className="text-gray-500">Metrics</dt><dd className="text-right font-semibold">{detail.tags.join(', ')}</dd></div>
+          </dl>
+        </Modal>
+      )}
+
+      {history && (
+        <Modal title="Device history" onClose={() => setHistory(false)} width="max-w-lg" footer={<button className={btnGhost} onClick={() => setHistory(false)}>Close</button>}>
+          <ul className="space-y-4">
+            {activity.map((a) => (
+              <li key={a.t} className="rounded-xl bg-gray-50 px-4 py-3">
+                <div className="flex justify-between gap-4">
+                  <p className="text-sm font-semibold">{a.t}</p>
+                  <span className="text-xs text-gray-400">{a.time}</span>
+                </div>
+                <p className="mt-1 text-xs text-gray-600">{a.d}</p>
+              </li>
+            ))}
+          </ul>
+        </Modal>
+      )}
+
+      {adding && (
+        <Modal
+          title="Add new device"
+          onClose={() => setAdding(false)}
+          footer={
+            <>
+              <button className={btnGhost} onClick={() => setAdding(false)}>Cancel</button>
+              <button className={btnPrimary} onClick={addDevice}>Add device</button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <Field label="Device type">
+              <select value={type} onChange={(e) => setType(Number(e.target.value))} className={inputCls}>
+                {deviceTypes.map((t, i) => (
+                  <option key={t.name} value={i}>{t.name}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Device name (optional)" error={addError}>
+              <input value={label} onChange={(e) => { setLabel(e.target.value); setAddError('') }} placeholder={deviceTypes[type].name} maxLength={40} className={inputCls} />
+            </Field>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

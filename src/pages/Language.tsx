@@ -1,23 +1,73 @@
 import { useState } from 'react'
 import { ChevronDown, Contrast, Globe, PersonStanding, ScanText, Type, Volume2, Ban } from 'lucide-react'
 import { Toggle } from '../components/ui'
+import { useToast } from '../components/feedback'
 
 const sizes = ['Small', 'Standard', 'Large', 'Extra Large']
+const rootSizes = ['87.5%', '100%', '112.5%', '125%']
 
-const controls = [
-  { t: 'High contrast mode', d: 'Increase visual distinction between elements', icon: Contrast, on: false },
-  { t: 'Screen reader optimizations', d: 'Semantic HTML structural enhancements', icon: ScanText, on: true },
-  { t: 'Audio summaries', d: 'Read key healthcare insights aloud', icon: Volume2, on: false },
-  { t: 'Reduce motion', d: 'Disable animations and transitions', icon: Ban, on: false },
+export interface Accessibility {
+  display: string
+  style: string
+  size: number
+  contrast: boolean
+  reader: boolean
+  audio: boolean
+  motion: boolean
+}
+
+export const defaultAccessibility: Accessibility = {
+  display: 'English (US)',
+  style: 'Direct Translation',
+  size: 1,
+  contrast: false,
+  reader: true,
+  audio: false,
+  motion: false,
+}
+
+const STORAGE_KEY = 'mednevo.accessibility'
+
+export function loadAccessibility(): Accessibility {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) return { ...defaultAccessibility, ...JSON.parse(raw) }
+  } catch {
+    // storage unavailable or corrupt: fall back to defaults
+  }
+  return defaultAccessibility
+}
+
+function saveAccessibility(a: Accessibility) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(a))
+  } catch {
+    // storage unavailable: the settings still apply for this session
+  }
+}
+
+export function applyAccessibility(a: Accessibility) {
+  const root = document.documentElement
+  root.style.fontSize = rootSizes[a.size] ?? '100%'
+  root.classList.toggle('a11y-contrast', a.contrast)
+  root.classList.toggle('a11y-reduce-motion', a.motion)
+}
+
+const controls: { t: string; d: string; icon: typeof Contrast; key: 'contrast' | 'reader' | 'audio' | 'motion' }[] = [
+  { t: 'High contrast mode', d: 'Increase visual distinction between elements', icon: Contrast, key: 'contrast' },
+  { t: 'Screen reader optimizations', d: 'Semantic HTML structural enhancements', icon: ScanText, key: 'reader' },
+  { t: 'Audio summaries', d: 'Read key healthcare insights aloud', icon: Volume2, key: 'audio' },
+  { t: 'Reduce motion', d: 'Disable animations and transitions', icon: Ban, key: 'motion' },
 ]
 
-function Select({ label, value, options }: { label: string; value: string; options: string[] }) {
+function Select({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (v: string) => void }) {
   return (
     <label className="block">
       <span className="mb-2 block text-[11px] text-gray-500">{label}</span>
       <div className="relative">
         <select
-          defaultValue={value}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
           className="h-12 w-full appearance-none rounded-xl border border-brand-200 bg-brand-50/60 px-4 text-sm text-gray-800 outline-none"
         >
           {options.map((o) => (
@@ -31,7 +81,27 @@ function Select({ label, value, options }: { label: string; value: string; optio
 }
 
 export default function Language() {
-  const [size, setSize] = useState(1)
+  const toast = useToast()
+  const [saved, setSaved] = useState(loadAccessibility)
+  const [draft, setDraft] = useState(saved)
+  const size = draft.size
+  const setSize = (n: number) => setDraft((d) => ({ ...d, size: n }))
+  const dirty = JSON.stringify(draft) !== JSON.stringify(saved)
+
+  const save = () => {
+    saveAccessibility(draft)
+    applyAccessibility(draft)
+    setSaved(draft)
+    toast('Language and accessibility settings saved.')
+  }
+
+  const reset = () => {
+    setDraft(defaultAccessibility)
+    saveAccessibility(defaultAccessibility)
+    applyAccessibility(defaultAccessibility)
+    setSaved(defaultAccessibility)
+    toast('Settings reset to defaults.', 'info')
+  }
 
   return (
     <div className="rounded-2xl bg-slate-50 px-8 pb-10 pt-1">
@@ -46,8 +116,8 @@ export default function Language() {
           Preferred Language
         </h3>
         <div className="mt-5 grid grid-cols-2 gap-4">
-          <Select label="Display Language" value="English (US)" options={['English (US)', 'English (UK)', 'தமிழ்', 'हिन्दी']} />
-          <Select label="Translation Style" value="Direct Translation" options={['Direct Translation', 'Simplified Medical Terms']} />
+          <Select label="Display Language" value={draft.display} options={['English (US)', 'English (UK)', 'தமிழ்', 'हिन्दी']} onChange={(v) => setDraft({ ...draft, display: v })} />
+          <Select label="Translation Style" value={draft.style} options={['Direct Translation', 'Simplified Medical Terms']} onChange={(v) => setDraft({ ...draft, style: v })} />
         </div>
       </div>
 
@@ -97,15 +167,23 @@ export default function Language() {
                   <p className="text-[11px] text-gray-400">{c.d}</p>
                 </div>
               </div>
-              <Toggle size="sm" defaultChecked={c.on} />
+              <Toggle size="sm" checked={draft[c.key]} onChange={(v) => setDraft({ ...draft, [c.key]: v })} />
             </div>
           ))}
         </div>
       </div>
 
       <div className="mt-6 flex gap-4">
-        <button className="rounded-xl bg-brand-gradient px-7 py-3 text-sm font-semibold text-white">Save Changes</button>
-        <button className="rounded-xl border border-gray-200 bg-white px-7 py-3 text-sm text-gray-600">Reset to Defaults</button>
+        <button
+          onClick={save}
+          disabled={!dirty}
+          className="rounded-xl bg-brand-gradient px-7 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Save Changes
+        </button>
+        <button onClick={reset} className="rounded-xl border border-gray-200 bg-white px-7 py-3 text-sm text-gray-600">
+          Reset to Defaults
+        </button>
       </div>
     </div>
   )

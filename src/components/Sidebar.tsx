@@ -14,6 +14,8 @@ import {
   ShieldPlus,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ConfirmModal, useApp, useToast } from './feedback'
 import patientAvatar from '../assets/patient-avatar.webp'
 
 export type SectionKey =
@@ -46,21 +48,64 @@ interface SidebarProps {
   onChange: (key: SectionKey) => void
 }
 
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024
+
 export default function Sidebar({ active, onChange }: SidebarProps) {
+  const toast = useToast()
+  const { signOut } = useApp()
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [photo, setPhoto] = useState<string | null>(patientAvatar)
+  const [uploaded, setUploaded] = useState<string | null>(null)
+  const [confirmLogout, setConfirmLogout] = useState(false)
+
+  // Release the object URL of an uploaded photo once it is replaced or removed
+  useEffect(() => () => { if (uploaded) URL.revokeObjectURL(uploaded) }, [uploaded])
+
+  const onPickPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) return toast('Please choose an image file (JPG, PNG or WebP).', 'error')
+    if (file.size > MAX_PHOTO_BYTES) return toast('Photo must be smaller than 5 MB.', 'error')
+    const url = URL.createObjectURL(file)
+    setUploaded(url)
+    setPhoto(url)
+    toast('Profile photo updated.')
+  }
+
+  const removePhoto = () => {
+    if (!photo) return toast('No profile photo to remove.', 'info')
+    setPhoto(null)
+    setUploaded(null)
+    toast('Profile photo removed.')
+  }
+
   return (
     <aside className="relative flex w-[390px] shrink-0 flex-col rounded-tr-[40px] bg-brand-gradient-v pb-10">
       {/* Profile card */}
       <div className="rounded-[36px] rounded-tl-none border-b border-white/20 bg-white/20 px-9 pb-9 pt-8 backdrop-blur-sm">
         <div className="flex items-center gap-6">
           <div className="relative">
-            <img
-              src={patientAvatar}
-              alt="Sarah Johnson"
-              className="h-[104px] w-[104px] rounded-full border-[3px] border-white/80 object-cover"
-            />
-            <span className="absolute bottom-1 right-0 flex h-7 w-7 items-center justify-center rounded-full bg-brand-500 ring-2 ring-white/60">
+            {photo ? (
+              <img
+                src={photo}
+                alt="Sarah Johnson"
+                className="h-[104px] w-[104px] rounded-full border-[3px] border-white/80 object-cover"
+              />
+            ) : (
+              <div className="flex h-[104px] w-[104px] items-center justify-center rounded-full border-[3px] border-white/80 bg-white/25 text-3xl font-bold text-white">
+                SJ
+              </div>
+            )}
+            <button
+              type="button"
+              aria-label="Change profile photo"
+              onClick={() => fileRef.current?.click()}
+              className="absolute bottom-1 right-0 flex h-7 w-7 items-center justify-center rounded-full bg-brand-500 ring-2 ring-white/60"
+            >
               <Camera className="h-3.5 w-3.5 text-white" />
-            </span>
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickPhoto} />
           </div>
           <div className="text-white">
             <h2 className="text-[22px] font-bold">Sarah Johnson</h2>
@@ -73,8 +118,10 @@ export default function Sidebar({ active, onChange }: SidebarProps) {
           </div>
         </div>
         <div className="mt-5 grid grid-cols-2 gap-3">
-          <button className="rounded-xl bg-white py-3 text-sm font-semibold text-brand-500">Upload Photo</button>
-          <button className="rounded-xl border border-white/30 bg-white/25 py-3 text-sm font-medium text-white">
+          <button onClick={() => fileRef.current?.click()} className="rounded-xl bg-white py-3 text-sm font-semibold text-brand-500">
+            Upload Photo
+          </button>
+          <button onClick={removePhoto} className="rounded-xl border border-white/30 bg-white/25 py-3 text-sm font-medium text-white">
             Remove
           </button>
         </div>
@@ -101,9 +148,18 @@ export default function Sidebar({ active, onChange }: SidebarProps) {
 
       <div className="mx-8 mt-10 border-t border-white/15" />
 
-      <button className="mt-8 flex items-center gap-4 px-14 text-[18px] font-medium text-rose-600">
+      <button onClick={() => setConfirmLogout(true)} className="mt-8 flex items-center gap-4 px-14 text-[18px] font-medium text-rose-600">
         <LogOut className="h-5 w-5" /> Logout
       </button>
+      {confirmLogout && (
+        <ConfirmModal
+          title="Log out?"
+          message="You will need to sign in again to manage your settings."
+          confirmLabel="Log out"
+          onConfirm={signOut}
+          onClose={() => setConfirmLogout(false)}
+        />
+      )}
     </aside>
   )
 }

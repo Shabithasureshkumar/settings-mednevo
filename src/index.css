@@ -17,3 +17,20 @@
   .bg-brand-gradient-v { background-image: linear-gradient(180deg, #5C24FF 0%, #A67EF9 100%); }
   .bg-brand-gradient-diag { background-image: linear-gradient(135deg, #5C24FF 0%, #A67EF9 100%); }
 }
+
+/* Accessibility preferences (Language & Accessibility page) */
+html.a11y-contrast .text-gray-400,
+html.a11y-contrast .text-gray-500,
+html.a11y-contrast .text-gray-600 {
+  color: #111827 !important;
+}
+html.a11y-contrast .border-gray-100,
+html.a11y-contrast .border-gray-200 {
+  border-color: #6b7280 !important;
+}
+html.a11y-reduce-motion *,
+html.a11y-reduce-motion *::before,
+html.a11y-reduce-motion *::after {
+  animation: none !important;
+  transition: none !important;
+}
